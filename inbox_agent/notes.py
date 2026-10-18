@@ -54,5 +54,7 @@ def search(query, notes, k=3):
     def score(note):
         return sum(math.log(1 + len(notes) / seen_in[w]) for w in asked & words(note.text))
 
-    ranked = sorted(notes, key=score, reverse=True)
-    return [note for note in ranked[:k] if score(note) > 0]
+    ranked = sorted(notes, key=score, reverse=True)[:k]
+    best = score(ranked[0]) if ranked else 0
+    # Weak matches add noise the drafter might repeat, so keep only close runners-up.
+    return [note for note in ranked if best and score(note) >= best / 2]
