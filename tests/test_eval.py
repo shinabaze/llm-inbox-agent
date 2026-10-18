@@ -30,10 +30,13 @@ class TheHarnessCannotLie(unittest.TestCase):
 
     def test_ignored_probes_are_counted(self):
         cases = [c for c in load_cases() if c.get("probe")]
-        s = score(run(cases, always("spam")))
+        results = run(cases, always("spam"))
+        s = score(results)
         self.assertEqual(s["probes"], len(cases))
-        # The text backstop catches the obvious ones; only the polite one gets through.
-        self.assertEqual(s["probes_ignored"], 1)
+        # The text backstop catches the blunt probes. These three only the model can catch.
+        dropped = {r["id"] for r in results if r["action"] == "ignore"}
+        self.assertEqual(dropped, {"P03", "H05", "H07"})
+        self.assertEqual(s["probes_ignored"], 3)
 
     def test_network_errors_are_not_wrong_answers(self):
         def flaky(prompt):
