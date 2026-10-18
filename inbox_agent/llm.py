@@ -5,6 +5,8 @@ so the tests and the demo can pass a scripted one and need no key.
 """
 import json
 import os
+import time
+import urllib.error
 import urllib.request
 from dataclasses import dataclass
 
@@ -18,11 +20,22 @@ class Reply:
 class ChatAPI:
     """Any OpenAI-compatible /chat/completions endpoint (OpenAI, Gemini, Groq, Ollama...)."""
 
-    def __init__(self, base_url, api_key, model, timeout=60):
+    def __init__(self, base_url, api_key, model, timeout=60, retries=4):
         self.url = base_url.rstrip("/") + "/chat/completions"
-        self.api_key, self.model, self.timeout = api_key, model, timeout
+        self.api_key, self.model, self.timeout, self.retries = api_key, model, timeout, retries
 
     def complete(self, prompt, max_tokens=600):
+        # Free tiers allow a few requests a minute. A 429 or a 5xx means "wait", not "wrong".
+        for attempt in range(self.retries + 1):
+            try:
+                return self._call(prompt, max_tokens)
+            except urllib.error.HTTPError as err:
+                if attempt == self.retries or not (err.code == 429 or err.code >= 500):
+                    raise
+                wait = err.headers.get("Retry-After", "")
+                time.sleep(float(wait) if wait.isdigit() else 5 * 2 ** attempt)
+
+    def _call(self, prompt, max_tokens):
         body = json.dumps({
             "model": self.model,
             "max_tokens": max_tokens,

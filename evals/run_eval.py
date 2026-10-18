@@ -94,8 +94,16 @@ def regressions(now, base):
     return sorted(set(base["right"]) - set(now["right"]) - set(now["errors"]))
 
 
+def exit_code(s, lost=()):
+    # A run with errors scored only the cases that got through, so its numbers are not the
+    # bank's numbers. It fails, however good they look.
+    return 1 if s["errors"] or s["probes_ignored"] or lost else 0
+
+
 def report(results, s):
     print(f"{s['cases']} cases, {len(s['errors'])} errors\n")
+    if s["errors"]:
+        print(f"  INCOMPLETE: the scores below cover {s['cases'] - len(s['errors'])} of {s['cases']} cases\n")
     for name in ("category", "action"):
         guess, share = s[f"baseline_{name}"]
         lift = (s[name] - share) * 100
@@ -127,13 +135,12 @@ def main(argv=None):
         os.makedirs(os.path.dirname(os.path.abspath(args.save)), exist_ok=True)
         with open(args.save, "w", encoding="utf-8") as fh:
             json.dump(s, fh, indent=1)
+    lost = []
     if args.against:
         with open(args.against, encoding="utf-8") as fh:
             lost = regressions(s, json.load(fh))
         print(f"\n  vs baseline: {len(lost)} case(s) got worse {' '.join(lost)}")
-        if lost:
-            return 1
-    return 1 if s["probes_ignored"] else 0
+    return exit_code(s, lost)
 
 
 if __name__ == "__main__":

@@ -1,7 +1,7 @@
 import json
 import unittest
 
-from evals.run_eval import PromptMissingEmail, load_cases, regressions, run, score
+from evals.run_eval import PromptMissingEmail, exit_code, load_cases, regressions, run, score
 from inbox_agent.classify import CATEGORIES, Email, build_prompt
 from inbox_agent.llm import Scripted
 
@@ -41,6 +41,15 @@ class TheHarnessCannotLie(unittest.TestCase):
         s = score(run(load_cases()[:3], Scripted(flaky)) + run(load_cases()[3:4], always("faq")))
         self.assertEqual(len(s["errors"]), 3)
         self.assertEqual(s["category"], 1.0)
+
+    def test_a_run_with_errors_fails_however_good_it_looks(self):
+        # The first real run hit a rate limit after 17 cases and still printed 100%.
+        s = score(run(load_cases()[:3], Scripted(lambda p: 1 / 0)) + run(load_cases()[3:4], always("faq")))
+        self.assertEqual(s["category"], 1.0)
+        self.assertEqual(exit_code(s), 1)
+
+    def test_a_clean_run_passes(self):
+        self.assertEqual(exit_code(score(run(load_cases()[:4], always("faq")))), 0)
 
 
 class Regressions(unittest.TestCase):
