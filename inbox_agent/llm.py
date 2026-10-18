@@ -25,14 +25,14 @@ class ChatAPI:
         self.api_key, self.model, self.timeout, self.retries = api_key, model, timeout, retries
 
     def complete(self, prompt, max_tokens=600):
-        # Free tiers allow a few requests a minute. A 429 or a 5xx means "wait", not "wrong".
         for attempt in range(self.retries + 1):
             try:
                 return self._call(prompt, max_tokens)
-            except urllib.error.HTTPError as err:
-                if attempt == self.retries or not (err.code == 429 or err.code >= 500):
+            except Exception as err:
+                if attempt == self.retries or not worth_retrying(err):
                     raise
-                wait = err.headers.get("Retry-After", "")
+                headers = getattr(err, "headers", None)
+                wait = headers.get("Retry-After", "") if headers else ""
                 time.sleep(float(wait) if wait.isdigit() else 5 * 2 ** attempt)
 
     def _call(self, prompt, max_tokens):
@@ -50,6 +50,14 @@ class ChatAPI:
         with urllib.request.urlopen(request, timeout=self.timeout) as response:
             choice = json.load(response)["choices"][0]
         return Reply(choice["message"].get("content") or "", choice.get("finish_reason") == "length")
+
+
+def worth_retrying(err):
+    # A rate limit, a server error or a dropped connection means "try again", not "wrong".
+    # Free tiers allow a few requests a minute, so a long eval hits all three.
+    if isinstance(err, urllib.error.HTTPError):
+        return err.code == 429 or err.code >= 500
+    return isinstance(err, (urllib.error.URLError, ConnectionError, TimeoutError))
 
 
 def from_env(path=".env"):
